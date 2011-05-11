@@ -1,0 +1,3 @@
+[submodule "altautils"]
+	path = altautils
+	url = git@github.com:altalang/Python-Utilities
