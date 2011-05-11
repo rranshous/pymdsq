@@ -1,0 +1,9 @@
+
+
+# us!
+@ NS ns1.cluky.com
+
+# where are we ?
+ns1 A 192.168.0.50
+
+
