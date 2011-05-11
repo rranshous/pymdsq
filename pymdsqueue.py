@@ -23,13 +23,19 @@
 
 import struct
 from utils import *
+from altautils.kawaiiqueue import KawaiiQueueClient
+import os.path
+import pickle
 
 class Source(object):
-    def __init__(self, name, host, port):
+
+    def __init__(self, name, host, port, data_cache_path):
         self._answers = {}
         self.name = name
         self.host = host
         self.port = port
+        self.data_cache_path = data_cache_path
+        self.update_from_cache()
         self.update()
 
     def update(self):
@@ -37,9 +43,18 @@ class Source(object):
         read new msgs off the queue
         """
 
-        queue = KawaiiQueueClient(name,host,port)
+        print 'updating from queue: %s %s %s' % (self.name,
+                                                 self.host,
+                                                 self.port)
 
+        queue = KawaiiQueueClient(self.name,
+                                  self.host,
+                                  self.port)
+
+        updated = False
         for qmsg in queue:
+            
+            updated = True
             
             question = qmsg.body.get('question')
             _type = qmsg.body.get('type')
@@ -48,7 +63,7 @@ class Source(object):
             question = question.lower()
             _type = _type.upper()
 
-            print 'adding %s %s %s' % (question,_type,value)
+            print 'qmsg: %s %s %s %s' % (qmsg.label,question,_type,value)
 
             if question == '@':
                 question = ''
@@ -70,14 +85,47 @@ class Source(object):
                 answer += labels2str(domain.split("."))
                 qtype = 15
 
-            self._answers.setdefault(question, {}).setdefault(qtype, []).append(answer)
+            answers = self._answers.setdefault(question, {}).setdefault(qtype, [])
+
+            # are we adding or removing
+            if qmsg.label.lower() == 'remove':
+                print 'removing'
+                try:
+                    answers.remove(answer)
+                except IndexError:
+                    print 'answer wasnt in answer'
+
+            else:
+                print 'adding'
+                if answer not in answers:
+                    answers.append(answer)
+                else:
+                    print 'already exists'
+
+        if updated:
+            self.update_cache()
+
+
+    def update_cache(self):
+        print 'updating cache'
+        with file(self.data_cache_path,'w') as fh:
+            fh.write(pickle.dumps(self._answers))
+
+    def update_from_cache(self):
+        if os.path.exists(self.data_cache_path):
+            with file(self.data_cache_path,'r') as fh:
+                self._answers = pickle.loads(fh.read())
+        
         
 
     def get_response(self, query, domain, qtype, qclass, src_addr):
+        print 'source query: %s %s %s %s %s' % (query,domain,qtype,qclass,src_addr)
+
         if query not in self._answers:
             return 3, []
         if qtype in self._answers[query]:
             results = [{'qtype': qtype, 'qclass':qclass, 'ttl': 500, 'rdata': answer} for answer in self._answers[query][qtype]]
+            print 'results: %s' % results
             return 0, results
         elif qtype == 1:
             # if they asked for an A record and we didn't find one, check for a CNAME

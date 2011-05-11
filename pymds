@@ -48,15 +48,18 @@ def serve():
     last_config_reload = time.time()
 
     while True:
-        # see if we should reload the config
-        if last_config_reload - time.time() > 60: # every 60s
-            update_sources()
-            last_config_reload = time.time()
-
         try:
             req_pkt, src_addr = udps.recvfrom(512)   # max UDP DNS pkt size
         except socket.error:
             continue
+
+        # see if we should reload the config
+        # TODO: not only be able to update after requests
+        if time.time() - last_config_reload > 10: # every 60s
+            print 'updating source'
+            update_sources()
+            last_config_reload = time.time()
+
         qid = None
         try:
             exception_rcode = None
@@ -67,6 +70,9 @@ def serve():
                 raise Exception("could not parse query")
             question = map(lambda x: x.lower(), question)
             found = False
+
+            print 'handling: %s %s %s %s' % (qid,question,qtype,qclass)
+
             for config in config_files.values():
                 if question[1:] == config['domain']:
                     query = question[0]
@@ -212,11 +218,14 @@ def read_config():
 
 def update_sources():
     for config_file in config_files:
+        print 'updating source for %s' % config_file
         config = config_files[config_file]
 
         # see if the source has a update method
-        if getattr(config,'reload',None):
+        if getattr(config,'update',None):
             config.update()
+        else:
+            print 'no reload found'
 
 def reread(signum, frame):
     read_config()
