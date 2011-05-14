@@ -35,7 +35,6 @@ class Source(object):
         self.host = host
         self.port = port
         self.data_cache_path = data_cache_path
-        self.update_from_cache()
         self.update()
 
     def update(self):
@@ -47,15 +46,20 @@ class Source(object):
                                                  self.host,
                                                  self.port)
 
+        # update from the cache, in case it's been
+        # edited directly. since we re-write it after
+        # each update we make, we know it's up to date
+        # w/ us
+        self.update_from_cache()
+
         queue = KawaiiQueueClient(self.name,
                                   self.host,
                                   self.port)
 
         updated = False
         for qmsg in queue:
-            
             updated = True
-            
+
             question = qmsg.body.get('question')
             _type = qmsg.body.get('type')
             value = qmsg.body.get('value')
